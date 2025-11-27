@@ -1,0 +1,18 @@
+{{- if .Values.authService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "saas-app.fullname" . }}-auth
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.authService.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.authService.service.type }}
+  ports:
+  - port: {{ .Values.authService.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "saas-app.authService.selectorLabels" . | nindent 4 }}
+{{- end }}

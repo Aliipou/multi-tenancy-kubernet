@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.tenant.namespace }}
+  labels:
+    name: {{ .Values.tenant.namespace }}
+    tenant-id: {{ .Values.tenant.id | quote }}
+    tenant-name: {{ .Values.tenant.name | quote }}
+    {{- include "saas-app.labels" . | nindent 4 }}

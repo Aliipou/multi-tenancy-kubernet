@@ -1,0 +1,41 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "saas-app.fullname" . }}-auth-pdb
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.authService.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "saas-app.authService.selectorLabels" . | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "saas-app.fullname" . }}-dashboard-pdb
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.dashboardService.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "saas-app.dashboardService.selectorLabels" . | nindent 6 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "saas-app.fullname" . }}-api-pdb
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.apiService.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "saas-app.apiService.selectorLabels" . | nindent 6 }}
+{{- end }}

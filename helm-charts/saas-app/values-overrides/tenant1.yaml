@@ -1,0 +1,60 @@
+# Tenant 1 specific configuration overrides
+
+tenant:
+  id: "tenant1"
+  name: "Tenant 1"
+  namespace: "tenant1"
+
+ingress:
+  host: "tenant1.localhost"
+
+# Tenant 1 has moderate resource requirements
+authService:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 8
+
+dashboardService:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 8
+
+apiService:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 12
+
+# Resource quota for tenant1
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+    pods: "50"
+    services: "20"

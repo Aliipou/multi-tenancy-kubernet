@@ -1,0 +1,62 @@
+# Tenant 2 specific configuration overrides
+
+tenant:
+  id: "tenant2"
+  name: "Tenant 2 Enterprise"
+  namespace: "tenant2"
+
+ingress:
+  host: "tenant2.localhost"
+
+# Tenant 2 is an enterprise customer with higher resource requirements
+authService:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 15
+
+dashboardService:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 15
+
+apiService:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 70
+
+# Higher resource quota for enterprise tenant
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "10"
+    requests.memory: "20Gi"
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    pods: "100"
+    services: "50"

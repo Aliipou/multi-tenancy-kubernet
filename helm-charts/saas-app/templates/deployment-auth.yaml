@@ -1,0 +1,76 @@
+{{- if .Values.authService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "saas-app.fullname" . }}-auth
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.authService.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.authService.autoscaling.enabled }}
+  replicas: {{ .Values.authService.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "saas-app.authService.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "saas-app.authService.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3001"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "saas-app.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: auth-service
+        image: {{ include "saas-app.authService.image" . }}
+        imagePullPolicy: {{ .Values.authService.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.authService.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: PORT
+          value: {{ .Values.authService.env.PORT | quote }}
+        - name: NODE_ENV
+          value: {{ .Values.authService.env.NODE_ENV | quote }}
+        - name: LOG_LEVEL
+          value: {{ .Values.authService.env.LOG_LEVEL | quote }}
+        - name: TENANT_ID
+          value: {{ .Values.tenant.id | quote }}
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "saas-app.fullname" . }}-secrets
+              key: jwt-secret
+        - name: JWT_EXPIRY
+          value: {{ .Values.authService.env.JWT_EXPIRY | quote }}
+        livenessProbe:
+          {{- toYaml .Values.authService.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.authService.readinessProbe | nindent 12 }}
+        startupProbe:
+          {{- toYaml .Values.authService.startupProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.authService.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

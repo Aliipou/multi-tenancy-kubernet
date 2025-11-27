@@ -1,0 +1,71 @@
+{{- if .Values.apiService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "saas-app.fullname" . }}-api
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.apiService.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.apiService.autoscaling.enabled }}
+  replicas: {{ .Values.apiService.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "saas-app.apiService.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "saas-app.apiService.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3002"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "saas-app.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: api-service
+        image: {{ include "saas-app.apiService.image" . }}
+        imagePullPolicy: {{ .Values.apiService.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.apiService.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: PORT
+          value: {{ .Values.apiService.env.PORT | quote }}
+        - name: NODE_ENV
+          value: {{ .Values.apiService.env.NODE_ENV | quote }}
+        - name: LOG_LEVEL
+          value: {{ .Values.apiService.env.LOG_LEVEL | quote }}
+        - name: TENANT_ID
+          value: {{ .Values.tenant.id | quote }}
+        - name: AUTH_SERVICE_URL
+          value: "http://{{ include "saas-app.fullname" . }}-auth:{{ .Values.authService.service.port }}"
+        livenessProbe:
+          {{- toYaml .Values.apiService.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.apiService.readinessProbe | nindent 12 }}
+        startupProbe:
+          {{- toYaml .Values.apiService.startupProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.apiService.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

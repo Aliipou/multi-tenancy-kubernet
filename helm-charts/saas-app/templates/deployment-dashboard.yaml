@@ -1,0 +1,75 @@
+{{- if .Values.dashboardService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "saas-app.fullname" . }}-dashboard
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.dashboardService.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.dashboardService.autoscaling.enabled }}
+  replicas: {{ .Values.dashboardService.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "saas-app.dashboardService.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "saas-app.dashboardService.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "saas-app.serviceAccountName" . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: dashboard-service
+        image: {{ include "saas-app.dashboardService.image" . }}
+        imagePullPolicy: {{ .Values.dashboardService.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.dashboardService.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: PORT
+          value: {{ .Values.dashboardService.env.PORT | quote }}
+        - name: NODE_ENV
+          value: {{ .Values.dashboardService.env.NODE_ENV | quote }}
+        - name: LOG_LEVEL
+          value: {{ .Values.dashboardService.env.LOG_LEVEL | quote }}
+        - name: TENANT_ID
+          value: {{ .Values.tenant.id | quote }}
+        - name: TENANT_NAME
+          value: {{ .Values.tenant.name | quote }}
+        - name: AUTH_SERVICE_URL
+          value: "http://{{ include "saas-app.fullname" . }}-auth:{{ .Values.authService.service.port }}"
+        - name: API_SERVICE_URL
+          value: "http://{{ include "saas-app.fullname" . }}-api:{{ .Values.apiService.service.port }}"
+        livenessProbe:
+          {{- toYaml .Values.dashboardService.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.dashboardService.readinessProbe | nindent 12 }}
+        startupProbe:
+          {{- toYaml .Values.dashboardService.startupProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.dashboardService.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,18 @@
+{{- if .Values.apiService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "saas-app.fullname" . }}-api
+  namespace: {{ .Values.tenant.namespace }}
+  labels:
+    {{- include "saas-app.apiService.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.apiService.service.type }}
+  ports:
+  - port: {{ .Values.apiService.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "saas-app.apiService.selectorLabels" . | nindent 4 }}
+{{- end }}

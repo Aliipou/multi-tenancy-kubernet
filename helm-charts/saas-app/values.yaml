@@ -1,0 +1,279 @@
+# Default values for saas-app Helm chart
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Tenant information
+tenant:
+  id: "tenant1"
+  name: "Tenant 1"
+  namespace: "tenant1"
+
+# Global settings
+global:
+  imageRegistry: "docker.io"
+  imagePullPolicy: IfNotPresent
+  storageClass: "standard"
+
+# Auth Service configuration
+authService:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: your-registry/auth-service
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 3001
+    targetPort: 3001
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  env:
+    PORT: "3001"
+    NODE_ENV: "production"
+    LOG_LEVEL: "info"
+    JWT_EXPIRY: "24h"
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 3001
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 3001
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  startupProbe:
+    httpGet:
+      path: /health/startup
+      port: 3001
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Dashboard Service configuration
+dashboardService:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: your-registry/dashboard-service
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  env:
+    PORT: "3000"
+    NODE_ENV: "production"
+    LOG_LEVEL: "info"
+
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  startupProbe:
+    httpGet:
+      path: /health/startup
+      port: 3000
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# API Service configuration
+apiService:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: your-registry/api-service
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 3002
+    targetPort: 3002
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  env:
+    PORT: "3002"
+    NODE_ENV: "production"
+    LOG_LEVEL: "info"
+
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: 3002
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: 3002
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  startupProbe:
+    httpGet:
+      path: /health/startup
+      port: 3002
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  host: "tenant1.localhost"
+  tls:
+    enabled: false
+    secretName: ""
+
+# Resource Quota
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "4"
+    requests.memory: "8Gi"
+    limits.cpu: "8"
+    limits.memory: "16Gi"
+    pods: "50"
+    services: "20"
+    persistentvolumeclaims: "10"
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+  egress:
+    - to:
+      - namespaceSelector: {}
+    - to:
+      - podSelector: {}
+
+# RBAC
+rbac:
+  enabled: true
+  create: true
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+    - ALL
+
+# Node selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

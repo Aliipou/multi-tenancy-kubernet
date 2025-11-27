@@ -1,0 +1,63 @@
+# Tenant 3 specific configuration overrides
+
+tenant:
+  id: "tenant3"
+  name: "Tenant 3 Startup"
+  namespace: "tenant3"
+
+ingress:
+  host: "tenant3.localhost"
+
+# Tenant 3 is a startup with minimal resource requirements
+authService:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+dashboardService:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+apiService:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 80
+
+# Minimal resource quota for startup tenant
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "2"
+    requests.memory: "4Gi"
+    limits.cpu: "4"
+    limits.memory: "8Gi"
+    pods: "30"
+    services: "15"
