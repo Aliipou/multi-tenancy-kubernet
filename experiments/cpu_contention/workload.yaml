@@ -1,0 +1,53 @@
+# cpu_contention/workload.yaml
+# Identical resource profile to baseline — same namespace, same limits.
+# An aggressor pod (stress-profile.yaml) is deployed alongside the victim
+# to test whether ResourceQuota prevents CPU starvation.
+
+tenant:
+  id: "bench-cpu"
+  name: "Bench CPU Contention"
+  namespace: "bench-cpu"
+
+authService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+dashboardService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+apiService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+resourceQuota:
+  hard:
+    requests.cpu: "1500m"
+    requests.memory: "1Gi"
+    limits.cpu: "4"
+    limits.memory: "4Gi"
+    pods: "15"

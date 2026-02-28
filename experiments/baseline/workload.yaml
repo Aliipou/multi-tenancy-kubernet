@@ -1,0 +1,53 @@
+# baseline/workload.yaml
+# Helm values override for the baseline experiment.
+# Clean deployment — no aggressors, HPA disabled, 1 replica per service.
+# Provides the P95/P99 reference that all other experiments compare against.
+
+tenant:
+  id: "bench-baseline"
+  name: "Bench Baseline"
+  namespace: "bench-baseline"
+
+authService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+dashboardService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+apiService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+resourceQuota:
+  hard:
+    requests.cpu: "600m"
+    requests.memory: "640Mi"
+    limits.cpu: "3"
+    limits.memory: "3Gi"
+    pods: "10"

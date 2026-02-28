@@ -1,0 +1,29 @@
+{
+  "_comment": "Expected output from cpu_contention experiment. II > 0 means latency degraded under CPU stress. With namespace isolation, II should be low (< 0.25). Without isolation, II can exceed 1.0.",
+  "experiment": "cpu_contention",
+  "timestamp": "2026-02-28T09:05:00Z",
+  "cluster": {
+    "k8s_version": "v1.33.6+k3s1",
+    "node_spec": "t3.micro (2vCPU, 1GB RAM)",
+    "cni": "flannel"
+  },
+  "workload": {
+    "target": "api-service /health (with cpu-aggressor running in same namespace)",
+    "duration_s": 60,
+    "concurrency": 50,
+    "seed": 42
+  },
+  "results": {
+    "throughput_rps": 720.0,
+    "p50_ms": 58.0,
+    "p95_ms": 162.0,
+    "p99_ms": 290.0,
+    "error_rate": 0.002
+  },
+  "metrics": {
+    "interference_index": 0.20,
+    "resource_fairness_deviation": null,
+    "autoscaling_stability_score": null
+  },
+  "_ii_interpretation": "II=0.20 — P95 latency increased 20% under CPU aggressor. Namespace ResourceQuota limits interference but does not eliminate it on a single node."
+}

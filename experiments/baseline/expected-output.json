@@ -1,0 +1,28 @@
+{
+  "_comment": "Expected output from baseline experiment on AWS EC2 t3.micro (2vCPU 1GB). Acceptable variance: ±20% on latency, ±10% on throughput.",
+  "experiment": "baseline",
+  "timestamp": "2026-02-28T09:00:00Z",
+  "cluster": {
+    "k8s_version": "v1.33.6+k3s1",
+    "node_spec": "t3.micro (2vCPU, 1GB RAM)",
+    "cni": "flannel"
+  },
+  "workload": {
+    "target": "api-service /health",
+    "duration_s": 60,
+    "concurrency": 50,
+    "seed": 42
+  },
+  "results": {
+    "throughput_rps": 890.0,
+    "p50_ms": 48.0,
+    "p95_ms": 135.0,
+    "p99_ms": 210.0,
+    "error_rate": 0.0
+  },
+  "metrics": {
+    "interference_index": null,
+    "resource_fairness_deviation": 0.12,
+    "autoscaling_stability_score": null
+  }
+}

@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Build output
+dist/
+build/
+
+# Secrets and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# AWS
+thesis-key.pem
+aws-deployment/
+
+# Docker
+docker-compose.override.yml
+
+# Helm
+*.tgz
+
+# Temporary files
+*.tmp
+*.bak
+New Text Document.txt
+
+# Claude
+.claude/

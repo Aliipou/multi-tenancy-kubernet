@@ -1,0 +1,47 @@
+# cpu_contention/stress-profile.yaml
+# CPU aggressor pod — deployed in the SAME namespace as the victim tenant.
+# Consumes 1 full CPU core continuously for the experiment duration.
+# Tests whether namespace ResourceQuota + cgroups limit cross-pod CPU interference.
+#
+# Aggressor is deliberately given a high CPU request (800m) to create contention.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-aggressor
+  namespace: bench-cpu
+  labels:
+    role: aggressor
+    experiment: cpu-contention
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: aggressor
+  template:
+    metadata:
+      labels:
+        role: aggressor
+        experiment: cpu-contention
+    spec:
+      # Keep aggressor off the same node as victim if node-level comparison needed
+      # affinity: ... (uncomment for comparison_node_isolation experiment)
+      containers:
+        - name: cpu-stress
+          image: polinux/stress:latest
+          args:
+            - stress
+            - --cpu
+            - "2"           # spin 2 workers to fully saturate 2 vCPU host
+            - --timeout
+            - "300s"        # run for 5 minutes max
+          resources:
+            requests:
+              cpu: "800m"
+              memory: "64Mi"
+            limits:
+              cpu: "1500m"
+              memory: "128Mi"
+          securityContext:
+            runAsNonRoot: false  # stress requires root for some modes
+            allowPrivilegeEscalation: false
