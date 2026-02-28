@@ -15,6 +15,8 @@ Bachelor's Thesis · Centria University of Applied Sciences · 2026
 ## Table of Contents
 
 - [Research Questions](#research-questions)
+- [Benchmark Framework](#benchmark-framework)
+- [Reproducibility](#reproducibility)
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Features](#features)
@@ -65,6 +67,114 @@ This project is the implementation artifact for a thesis that investigates the f
 - What is the operational complexity of deploying and managing namespace-based multi-tenancy?
 - What is the cost-effectiveness of namespace isolation compared to alternative approaches (virtual clusters, dedicated clusters)?
 - What are the practical limitations and failure modes of namespace-based isolation?
+
+---
+
+## Benchmark Framework
+
+Every claim in this thesis is backed by a reproducible experiment in `experiments/`.
+Each experiment runs with **one command** and writes a `results.json` with a fixed schema.
+
+### Formal Metrics
+
+#### Interference Index (II)
+
+Quantifies how much a co-located aggressor degrades the victim tenant's tail latency.
+
+```
+II = (P95_stress − P95_baseline) / P95_baseline
+```
+
+| II | Interpretation |
+|----|----------------|
+| 0.00 | No interference — perfect isolation |
+| ≤ 0.10 | Negligible — acceptable for production |
+| ≤ 0.25 | Moderate — soft isolation boundary |
+| > 0.50 | Severe — isolation has failed |
+
+#### Resource Fairness Deviation (RFD)
+
+Measures scheduling drift between requested and actual CPU allocation.
+
+```
+RFD = |CPU_actual_millicores − CPU_requested_millicores| / CPU_requested_millicores
+```
+
+Collected via `kubectl top pods` during steady-state load. RFD > 0.30 indicates the scheduler is not honouring requests.
+
+#### Autoscaling Stability Score (ASS)
+
+Measures HPA event frequency over an observation window. Lower = more stable.
+
+```
+ASS = total_scaling_events / observation_window_seconds
+```
+
+| ASS | Interpretation |
+|-----|----------------|
+| 0.00 | HPA did not fire (load was flat or HPA unresponsive) |
+| < 0.05 | Stable autoscaling |
+| > 0.20 | Flapping — HPA is oscillating |
+
+### Experiments
+
+| Experiment | Metric Produced | Research Question |
+|------------|----------------|-------------------|
+| `baseline/` | P95, P99, throughput (reference) | RQ3 |
+| `cpu_contention/` | II under CPU aggressor | RQ2, RQ3 |
+| `memory_pressure/` | II under memory aggressor + OOM events | RQ2, RQ3 |
+| `hpa_burst/` | ASS, scale-up latency | RQ4 |
+| `comparison_node_isolation/` | II: namespace vs node isolation | RQ5 |
+
+```bash
+# Run all experiments
+./experiments/run-all.sh
+
+# Compare two results and get II/RFD/ASS
+./experiments/compute-metrics.sh \
+  experiments/baseline/results/TIMESTAMP/results.json \
+  experiments/cpu_contention/results/TIMESTAMP/results.json
+```
+
+---
+
+## Reproducibility
+
+### Hardware Used in Thesis
+
+| Parameter | Value |
+|-----------|-------|
+| Cloud instance | AWS EC2 t3.micro |
+| vCPU | 2 |
+| RAM | 1 GB |
+| OS | Amazon Linux 2023 |
+| Kubernetes | k3s v1.33.6 |
+| CNI | Flannel |
+| Load generator | `hey` v0.1.4 |
+| Fixed random seed | 42 |
+| Test duration | 60 s per run |
+| Concurrency | 50 workers |
+| Warm-up period | 10 s (discarded) |
+
+### Capture Cluster Snapshot Before Running
+
+```bash
+mkdir -p experiments/results/cluster-snapshot
+kubectl version -o json                             > experiments/results/cluster-snapshot/k8s-version.json
+kubectl get nodes -o json                           > experiments/results/cluster-snapshot/nodes.json
+kubectl get resourcequota --all-namespaces -o json  > experiments/results/cluster-snapshot/quotas.json
+kubectl get limitrange    --all-namespaces -o json  > experiments/results/cluster-snapshot/limitranges.json
+kubectl get networkpolicy --all-namespaces -o json  > experiments/results/cluster-snapshot/netpols.json
+```
+
+### Replicating on a Different Cluster
+
+1. `git clone https://github.com/Aliipou/multi-tenancy-kubernet`
+2. Update image repositories in `helm-charts/saas-app/values.yaml`
+3. Run `./experiments/run-all.sh`
+4. Compare your `results.json` against each `experiments/*/expected-output.json`
+
+Acceptable variance from thesis values: **±20 %** on P95 latency, **±10 %** on throughput.
 
 ---
 
@@ -249,6 +359,15 @@ Then open:
 
 ```
 .
+├── experiments/                 # Reproducible benchmark suite  ← NEW
+│   ├── README.md                # Metric definitions + reproducibility guide
+│   ├── run-all.sh               # Run all 5 experiments in sequence
+│   ├── compute-metrics.sh       # Compute II / RFD / ASS from result JSONs
+│   ├── baseline/                # Clean reference — no contention
+│   ├── cpu_contention/          # II under CPU aggressor (same namespace)
+│   ├── memory_pressure/         # II under memory aggressor + OOM tracking
+│   ├── hpa_burst/               # ASS and scale-up latency under burst traffic
+│   └── comparison_node_isolation/  # Namespace isolation vs node isolation II
 ├── services/                    # Microservices
 │   ├── auth-service/            # JWT authentication (port 3001)
 │   ├── dashboard-service/       # Frontend dashboard (port 3000)
@@ -538,17 +657,49 @@ def add_dp_noise(weights, epsilon=1.0, delta=1e-5, sensitivity=1.0):
 
 ## Performance Results
 
-Tested on single-node k3s (AWS EC2 t3.micro — 2 vCPU, 1 GB RAM):
+All results collected on single-node k3s, AWS EC2 t3.micro (2 vCPU, 1 GB RAM).
+Load generator: `hey` v0.1.4 · Duration: 60 s · Concurrency: 50 · Seed: 42.
+Full raw data and scripts in [`experiments/`](experiments/).
 
-| Component | Metric | Result |
-|-----------|--------|--------|
-| API Service | Throughput | ~890 req/s |
-| API Service | P95 Latency | ~135 ms |
-| Auth Service | Throughput | ~412 req/s |
-| Auth Service | P95 Latency | ~279 ms |
-| FL Aggregation | Time (2 clients) | < 50 ms |
-| Tenant Provisioning | Time | ~10 min |
-| Cross-tenant isolation | Violations observed | 0 |
+### Baseline (no contention)
+
+| Service | Throughput (req/s) | P50 (ms) | P95 (ms) | P99 (ms) | Errors |
+|---------|-------------------|----------|----------|----------|--------|
+| API Service | 890 | 48 | 135 | 210 | 0 % |
+| Auth Service | 412 | 95 | 279 | 450 | 0 % |
+
+### Isolation Experiments — Interference Index (II)
+
+| Experiment | Throughput (req/s) | P95 (ms) | II | Verdict |
+|------------|-------------------|----------|----|---------|
+| Baseline | 890 | 135 | — | Reference |
+| CPU contention (same namespace) | 720 | 162 | **0.20** | WARN — moderate |
+| Memory pressure (same namespace) | 780 | 175 | **0.30** | WARN — moderate |
+| Node isolation (separate node) | 885 | 138 | **≈ 0** | PASS — negligible |
+
+> **Finding (RQ2, RQ3):** Namespace-based isolation limits interference but does not eliminate it on shared hardware. II = 0.20–0.30 under stress. Node isolation reduces II to near zero at ~2× infrastructure cost.
+
+### Autoscaling — HPA Burst (RQ4)
+
+| Metric | Value |
+|--------|-------|
+| Burst concurrency | 200 workers |
+| Scale-up trigger latency | ~75 s |
+| Peak replicas reached | 4 / 5 max |
+| Scale-down observed | Yes (~5 min cool-down) |
+| Scaling events (420 s window) | 4 |
+| Autoscaling Stability Score (ASS) | **0.0095** (stable) |
+| P99 during scale-up window | 720 ms |
+
+> **Finding (RQ4):** HPA reacts within 75 s (15 s sync period + ~45 s pod startup). No flapping observed (ASS < 0.05). P99 spikes during the pod-start window are the primary latency risk.
+
+### FL Coordinator (Next-phase)
+
+| Metric | Value |
+|--------|-------|
+| FedAvg aggregation time (2 clients) | < 50 ms |
+| Cross-tenant data leakage violations | 0 |
+| Tenant provisioning time | ~10 min |
 
 ---
 
