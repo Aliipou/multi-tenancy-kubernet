@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fl-coordinator
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fl-coordinator
+    component: federated-learning
+spec:
+  selector:
+    app: fl-coordinator
+  ports:
+    - name: http
+      port: {{ .Values.coordinator.port }}
+      targetPort: {{ .Values.coordinator.port }}
+      protocol: TCP
+  type: ClusterIP

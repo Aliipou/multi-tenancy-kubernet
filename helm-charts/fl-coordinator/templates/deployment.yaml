@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fl-coordinator
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fl-coordinator
+    component: federated-learning
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: {{ .Values.coordinator.replicaCount }}
+  selector:
+    matchLabels:
+      app: fl-coordinator
+  template:
+    metadata:
+      labels:
+        app: fl-coordinator
+        component: federated-learning
+      annotations:
+        # Allow Prometheus to scrape the /metrics endpoint automatically
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.coordinator.port | quote }}
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: fl-coordinator
+          image: {{ .Values.coordinator.image }}:{{ .Values.coordinator.tag }}
+          imagePullPolicy: {{ .Values.coordinator.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.coordinator.port }}
+              name: http
+          env:
+            - name: FL_MIN_CLIENTS
+              value: {{ .Values.coordinator.minClients | quote }}
+            - name: FL_SHARED_SECRET
+              # Secret loaded from Kubernetes Secret — never hardcoded in values
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sharedSecretName }}
+                  key: {{ .Values.sharedSecretKey }}
+          resources:
+            requests:
+              cpu: {{ .Values.coordinator.resources.requests.cpu | quote }}
+              memory: {{ .Values.coordinator.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.coordinator.resources.limits.cpu | quote }}
+              memory: {{ .Values.coordinator.resources.limits.memory | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.coordinator.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.coordinator.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

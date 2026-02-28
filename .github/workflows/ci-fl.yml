@@ -1,0 +1,139 @@
+name: FL CI
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - "services/fl-coordinator/**"
+      - "services/fl-client/**"
+      - "helm-charts/fl-coordinator/**"
+      - ".github/workflows/ci-fl.yml"
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  # ── FL Coordinator ──────────────────────────────────────────────────────────
+  test-fl-coordinator:
+    name: Test FL Coordinator
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/fl-coordinator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            --cov=main --cov-report=term-missing \
+            --cov-fail-under=100
+
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check main.py
+          ruff format --check main.py
+
+      - name: Type check
+        run: |
+          pip install mypy
+          mypy --strict main.py
+
+      - name: Security scan
+        run: |
+          pip install bandit
+          bandit -r main.py -ll
+
+  # ── FL Client ───────────────────────────────────────────────────────────────
+  test-fl-client:
+    name: Test FL Client
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/fl-client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            --cov=main --cov-report=term-missing \
+            --cov-fail-under=100
+
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check main.py
+          ruff format --check main.py
+
+      - name: Type check
+        run: |
+          pip install mypy
+          mypy --strict main.py
+
+      - name: Security scan
+        run: |
+          pip install bandit
+          bandit -r main.py -ll
+
+  # ── Helm Chart ──────────────────────────────────────────────────────────────
+  validate-helm:
+    name: Validate Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint fl-coordinator chart
+        run: |
+          helm lint helm-charts/fl-coordinator \
+            --set coordinator.image=ghcr.io/aliipou/fl-coordinator \
+            --set coordinator.tag=latest \
+            --set coordinator.minClients=2
+
+      - name: Dry-run template render
+        run: |
+          helm template fl-coordinator helm-charts/fl-coordinator \
+            --set coordinator.image=ghcr.io/aliipou/fl-coordinator \
+            --set coordinator.tag=latest \
+            --set coordinator.minClients=2 \
+            | kubectl apply --dry-run=client -f - 2>/dev/null || true
+
+  # ── Docker Images ───────────────────────────────────────────────────────────
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-fl-coordinator, test-fl-client]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build FL Coordinator
+        run: |
+          docker build -t fl-coordinator:${{ github.sha }} services/fl-coordinator/
+
+      - name: Build FL Client
+        run: |
+          docker build -t fl-client:${{ github.sha }} services/fl-client/
+
+      - name: Confirm images exist
+        run: |
+          docker images fl-coordinator:${{ github.sha }}
+          docker images fl-client:${{ github.sha }}

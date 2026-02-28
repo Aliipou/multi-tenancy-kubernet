@@ -1,0 +1,13 @@
+apiVersion: v2
+name: fl-coordinator
+description: Federated Learning coordinator for multi-tenant Kubernetes SaaS
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - federated-learning
+  - kubernetes
+  - multi-tenancy
+maintainers:
+  - name: Ali Pourrahim
+    email: ali.pourrahim@centria.fi

@@ -1,0 +1,38 @@
+# fl-coordinator Helm values
+# Deploy the FedAvg aggregation server into the fl-system namespace.
+
+coordinator:
+  # Container image for the FL coordinator service
+  image: ghcr.io/aliipou/fl-coordinator
+  tag: latest
+  pullPolicy: IfNotPresent
+
+  # Minimum number of tenant clients that must submit before aggregation fires
+  minClients: 2
+
+  # Port the coordinator listens on (also used by Service and probes)
+  port: 8080
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  # Replica count — keep at 1 (state is in-memory; HA requires external state store)
+  replicaCount: 1
+
+# Name of the Kubernetes Secret that holds the FL shared secret.
+# Created externally: kubectl create secret generic fl-shared-secret \
+#   --from-literal=secret=$(openssl rand -hex 32) -n fl-system
+sharedSecretName: fl-shared-secret
+sharedSecretKey: secret
+
+# Namespace where the coordinator and the fl-shared-secret live
+namespace: fl-system
+
+# Label selector for tenant namespaces allowed to reach the coordinator.
+# Tenant namespaces must be labelled: fl-enabled=true
+tenantFlEnabledLabel: "true"

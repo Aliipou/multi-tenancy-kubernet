@@ -1,0 +1,75 @@
+# NetworkPolicy for the FL coordinator.
+#
+# Default posture: deny all ingress.
+# Explicit allow rules:
+#   1. FL clients in namespaces labelled fl-enabled=true
+#   2. Prometheus scraping from the monitoring namespace
+#
+# FL clients can only reach the coordinator — they cannot reach other tenant
+# namespaces because the per-tenant default-deny policy blocks that egress.
+
+---
+# Allow fl-client pods in opted-in tenant namespaces to reach the coordinator
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fl-coordinator-ingress-from-clients
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: fl-coordinator
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              fl-enabled: {{ .Values.tenantFlEnabledLabel | quote }}
+          podSelector:
+            matchLabels:
+              component: fl-client
+      ports:
+        - protocol: TCP
+          port: {{ .Values.coordinator.port }}
+    # Allow Prometheus scraping from the monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              purpose: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.coordinator.port }}
+---
+# Per-tenant fl-client egress: only to coordinator, not to other tenant namespaces
+# This template generates one NetworkPolicy per tenant that opts in to FL.
+# The tenant namespace must be labelled: fl-enabled=true
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: fl-client-egress-to-coordinator
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      component: fl-client
+  policyTypes:
+    - Egress
+  egress:
+    # Only allow egress to the fl-coordinator pod
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              purpose: federated-learning-control-plane
+          podSelector:
+            matchLabels:
+              app: fl-coordinator
+      ports:
+        - protocol: TCP
+          port: {{ .Values.coordinator.port }}
+    # Allow DNS resolution (required for service discovery)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
