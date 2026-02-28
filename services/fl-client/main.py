@@ -252,5 +252,5 @@ async def run_fl_loop() -> None:
             await asyncio.sleep(TRAINING_INTERVAL_S)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     asyncio.run(run_fl_loop())
