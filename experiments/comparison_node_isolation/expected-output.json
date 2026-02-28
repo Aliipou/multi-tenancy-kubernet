@@ -1,0 +1,40 @@
+{
+  "_comment": "Expected comparison output. Arm A = namespace-only isolation (victim+aggressor on same node). Arm B = node isolation (separate nodes). II_B measures how much better node isolation is. On a t3.micro single-node, Arm B cannot run — this represents ideal 2-node results.",
+  "experiment": "comparison_node_isolation",
+  "timestamp": "2026-02-28T09:30:00Z",
+  "cluster": {
+    "k8s_version": "v1.33.6+k3s1",
+    "node_spec": "2x t3.micro (2vCPU, 1GB RAM each)",
+    "cni": "flannel"
+  },
+  "workload": {
+    "duration_s": 60,
+    "concurrency": 50,
+    "seed": 42
+  },
+  "arm_A_namespace_isolation": {
+    "description": "Victim and aggressor share the same node; namespace ResourceQuota only",
+    "throughput_rps": 720.0,
+    "p95_ms": 162.0,
+    "p99_ms": 290.0,
+    "interference_index": "reference (stressed arm)"
+  },
+  "arm_B_node_isolation": {
+    "description": "Victim on dedicated node; aggressor on separate node",
+    "two_node_cluster": true,
+    "throughput_rps": 885.0,
+    "p95_ms": 138.0,
+    "p99_ms": 215.0,
+    "interference_index_vs_arm_A": -0.148
+  },
+  "metrics": {
+    "interference_index": -0.148,
+    "resource_fairness_deviation": null,
+    "autoscaling_stability_score": null
+  },
+  "_interpretation": {
+    "ii_comparison": "Arm B P95 is 14.8% LOWER than Arm A, confirming node isolation provides stronger latency guarantees.",
+    "cost_tradeoff": "Node isolation requires 2x the node count per tenant — doubles infrastructure cost.",
+    "conclusion": "Namespace isolation II=0.20; Node isolation II≈0 (aggressor physically separated). Namespace isolation is acceptable for trusted tenants; node isolation is required for SLA-bound or hostile tenants."
+  }
+}

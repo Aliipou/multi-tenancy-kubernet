@@ -1,0 +1,57 @@
+# hpa_burst/workload.yaml
+# Starts with 1 replica and low CPU threshold to make HPA react quickly.
+# The run.sh generates a traffic burst to trigger scale-up, then backs off
+# to observe scale-down. ASS = scaling_events / observation_window_seconds.
+
+tenant:
+  id: "bench-hpa"
+  name: "Bench HPA Burst"
+  namespace: "bench-hpa"
+
+authService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false       # only test HPA on the API service
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+dashboardService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+apiService:
+  replicaCount: 1          # start low so HPA has room to scale
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 40    # low threshold — triggers faster
+    targetMemoryUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: "200m"           # 40% of 200m = 80m — burst load will exceed this
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+resourceQuota:
+  hard:
+    requests.cpu: "2"
+    requests.memory: "2Gi"
+    limits.cpu: "6"
+    limits.memory: "6Gi"
+    pods: "20"

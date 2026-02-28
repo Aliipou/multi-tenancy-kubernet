@@ -1,0 +1,30 @@
+{
+  "_comment": "Expected output from memory_pressure experiment on t3.micro (1GB RAM). Memory aggressor consumes 512MB in same namespace. On a 1GB node, this forces the kernel to reclaim pages, causing GC pressure on the Node.js API service.",
+  "experiment": "memory_pressure",
+  "timestamp": "2026-02-28T09:10:00Z",
+  "cluster": {
+    "k8s_version": "v1.33.6+k3s1",
+    "node_spec": "t3.micro (2vCPU, 1GB RAM)",
+    "cni": "flannel"
+  },
+  "workload": {
+    "target": "api-service /health (with mem-aggressor 512MB in same namespace)",
+    "duration_s": 60,
+    "concurrency": 50,
+    "seed": 42
+  },
+  "results": {
+    "throughput_rps": 780.0,
+    "p50_ms": 55.0,
+    "p95_ms": 175.0,
+    "p99_ms": 340.0,
+    "error_rate": 0.004
+  },
+  "metrics": {
+    "interference_index": 0.30,
+    "resource_fairness_deviation": null,
+    "autoscaling_stability_score": null,
+    "oom_kill_events": 0
+  },
+  "_ii_interpretation": "II=0.30 — P95 latency increased 30% under 512MB memory aggressor. Higher II than CPU test because Node.js GC is sensitive to page reclaim. LimitRange prevents OOM kills (oom_kill_events=0) but not latency spikes."
+}

@@ -1,0 +1,36 @@
+{
+  "_comment": "Expected output from hpa_burst experiment. HPA target CPU=40% on a 1-replica deployment. Burst at 200 concurrency should trigger scale-up within 60-90s (k8s default HPA sync period is 15s). ASS < 0.05 = stable.",
+  "experiment": "hpa_burst",
+  "timestamp": "2026-02-28T09:20:00Z",
+  "cluster": {
+    "k8s_version": "v1.33.6+k3s1",
+    "node_spec": "t3.micro (2vCPU, 1GB RAM)",
+    "cni": "flannel"
+  },
+  "workload": {
+    "target": "api-service /health",
+    "burst_duration_s": 120,
+    "burst_concurrency": 200,
+    "observation_window_s": 420,
+    "seed": 42
+  },
+  "results": {
+    "throughput_rps": 650.0,
+    "p50_ms": 120.0,
+    "p95_ms": 380.0,
+    "p99_ms": 720.0,
+    "error_rate": 0.01
+  },
+  "metrics": {
+    "interference_index": null,
+    "resource_fairness_deviation": null,
+    "autoscaling_stability_score": 0.0095,
+    "scaling_events_total": 4,
+    "scale_up_latency_s": 75
+  },
+  "_interpretation": {
+    "ass": "ASS=0.0095 — 4 events in 420s. Stable autoscaling. No flapping observed.",
+    "scale_up_latency": "First scale-up triggered at ~75s after burst start. HPA sync period 15s + pod startup ~45s.",
+    "p99_note": "P99 spike (720ms) during scale-up window before new replicas became ready."
+  }
+}

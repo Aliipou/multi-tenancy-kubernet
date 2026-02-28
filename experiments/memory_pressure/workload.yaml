@@ -1,0 +1,53 @@
+# memory_pressure/workload.yaml
+# Same service resource profile as baseline.
+# A memory aggressor (stress-profile.yaml) is co-located in the same namespace.
+# Tests whether LimitRange prevents OOM from spilling into victim containers.
+
+tenant:
+  id: "bench-mem"
+  name: "Bench Memory Pressure"
+  namespace: "bench-mem"
+
+authService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+dashboardService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+apiService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+resourceQuota:
+  hard:
+    requests.cpu: "1500m"
+    requests.memory: "1536Mi"
+    limits.cpu: "4"
+    limits.memory: "4Gi"
+    pods: "15"

@@ -1,0 +1,82 @@
+# comparison_node_isolation/stress-profile.yaml
+# CPU aggressor used in BOTH arms of the comparison.
+#
+# Arm A (namespace isolation): aggressor deployed with no nodeSelector
+#   -> scheduled on the same node as victim by Kubernetes default scheduling.
+#
+# Arm B (node isolation): aggressor deployed with nodeSelector isolation-role=aggressor
+#   -> forcibly placed on the dedicated aggressor node, away from victim.
+#
+# The run.sh deploys the correct variant for each arm automatically.
+
+# ── Arm A: aggressor co-located (no nodeSelector) ────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-aggressor-colocated
+  namespace: bench-ns-iso    # will be overridden by run.sh via kubectl patch
+  labels:
+    role: aggressor
+    arm: namespace-isolation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: aggressor
+      arm: namespace-isolation
+  template:
+    metadata:
+      labels:
+        role: aggressor
+        arm: namespace-isolation
+    spec:
+      containers:
+        - name: cpu-stress
+          image: polinux/stress:latest
+          args: ["stress", "--cpu", "2", "--timeout", "300s"]
+          resources:
+            requests:
+              cpu: "800m"
+              memory: "64Mi"
+            limits:
+              cpu: "1500m"
+              memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+# ── Arm B: aggressor on dedicated aggressor node ──────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-aggressor-isolated
+  namespace: bench-node-iso
+  labels:
+    role: aggressor
+    arm: node-isolation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: aggressor
+      arm: node-isolation
+  template:
+    metadata:
+      labels:
+        role: aggressor
+        arm: node-isolation
+    spec:
+      nodeSelector:
+        isolation-role: aggressor    # pinned to a different node than victim
+      containers:
+        - name: cpu-stress
+          image: polinux/stress:latest
+          args: ["stress", "--cpu", "2", "--timeout", "300s"]
+          resources:
+            requests:
+              cpu: "800m"
+              memory: "64Mi"
+            limits:
+              cpu: "1500m"
+              memory: "128Mi"
+          securityContext:
+            allowPrivilegeEscalation: false

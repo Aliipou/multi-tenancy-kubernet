@@ -1,0 +1,48 @@
+# memory_pressure/stress-profile.yaml
+# Memory aggressor pod — deployed in the SAME namespace as the victim tenant.
+# Allocates and touches 512 MB of memory to trigger kernel memory pressure
+# and test whether LimitRange + cgroups prevent victim OOM or GC pauses.
+#
+# Note: aggressor memory request (512Mi) is deliberately high to create
+# real memory pressure on a 1GB node (t3.micro).
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mem-aggressor
+  namespace: bench-mem
+  labels:
+    role: aggressor
+    experiment: memory-pressure
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      role: aggressor
+  template:
+    metadata:
+      labels:
+        role: aggressor
+        experiment: memory-pressure
+    spec:
+      containers:
+        - name: mem-stress
+          image: polinux/stress:latest
+          args:
+            - stress
+            - --vm
+            - "1"            # one memory worker
+            - --vm-bytes
+            - "512M"         # allocate and touch 512 MB
+            - --vm-keep      # keep memory allocated (do not free between passes)
+            - --timeout
+            - "300s"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "512Mi"
+            limits:
+              cpu: "200m"
+              memory: "768Mi"   # cap to prevent aggressor from OOM-killing itself
+          securityContext:
+            allowPrivilegeEscalation: false

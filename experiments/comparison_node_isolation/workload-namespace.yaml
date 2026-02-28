@@ -1,0 +1,53 @@
+# comparison_node_isolation/workload-namespace.yaml
+# ARM A: Namespace-only isolation.
+# Victim and aggressor share the SAME node with no nodeSelector constraint.
+# This replicates the default multi-tenant setup tested in cpu_contention/.
+
+tenant:
+  id: "bench-ns-iso"
+  name: "Bench Namespace Isolation"
+  namespace: "bench-ns-iso"
+
+authService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+dashboardService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+apiService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+resourceQuota:
+  hard:
+    requests.cpu: "1500m"
+    requests.memory: "1Gi"
+    limits.cpu: "4"
+    limits.memory: "4Gi"
+    pods: "15"

@@ -1,0 +1,68 @@
+# comparison_node_isolation/workload-node.yaml
+# ARM B: Node-level isolation.
+# Victim pods are pinned to a dedicated node via nodeSelector label.
+# The aggressor is pinned to a DIFFERENT node.
+# This simulates dedicated node-pool isolation (a stronger but costlier model).
+#
+# Prerequisites:
+#   Label your victim node:    kubectl label node <victim-node>  isolation-role=victim
+#   Label your aggressor node: kubectl label node <stress-node>  isolation-role=aggressor
+#
+# On a single-node cluster (t3.micro), this test CANNOT run as intended.
+# Use a 2-node cluster or simulate with taints/tolerations in kind/k3s.
+
+tenant:
+  id: "bench-node-iso"
+  name: "Bench Node Isolation"
+  namespace: "bench-node-iso"
+
+authService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  # Pin all victim service pods to the dedicated victim node
+  nodeSelector:
+    isolation-role: victim
+
+dashboardService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  nodeSelector:
+    isolation-role: victim
+
+apiService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  nodeSelector:
+    isolation-role: victim
+
+resourceQuota:
+  hard:
+    requests.cpu: "1500m"
+    requests.memory: "1Gi"
+    limits.cpu: "4"
+    limits.memory: "4Gi"
+    pods: "15"
