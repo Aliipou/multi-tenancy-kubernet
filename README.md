@@ -754,6 +754,27 @@ Full raw data and scripts in [`experiments/`](experiments/).
 
 ---
 
+## Threats to Validity
+
+| Threat | Category | Mitigation |
+|--------|----------|-----------|
+| Synthetic workloads (`hey` HTTP benchmarks) may not match real-world SaaS traffic patterns | External validity | Parameterised scripts — swap in real traces without code changes |
+| Single-node k3s on t3.micro; results may differ on multi-node clusters or other CNI plugins | Internal validity | Reported hardware/software versions; experiments are reproducible via `experiments/` scripts |
+| Kubernetes version dependency — API scheduling and HPA behaviour can change across releases | Construct validity | Pinned to k3s v1.29; tested on AWS EC2 with documented kernel and containerd versions |
+| FL evaluation uses a shallow two-layer MLP on an IID split; non-IID data would change convergence | External validity | Model architecture and data distribution documented; future work noted in §Future Work |
+| II and ASS metrics are author-defined; no direct comparison against prior benchmark suites | Conclusion validity | Metric definitions formalised (§Benchmark Framework); raw data included for independent recomputation |
+
+---
+
+## Contributions
+
+1. **Formalised tenant-isolation metrics** — defined Interference Index (II), Relative Flood Degradation (RFD), and Autoscaling Stability Score (ASS) as measurable, reproducible performance signals for namespace-based multi-tenancy.
+2. **Implemented and evaluated five FL privacy/robustness extensions** — Differential Privacy (Gaussian mechanism), Krum Byzantine-robust aggregation, Coordinate-wise TrimmedMean, asynchronous timer-based aggregation, mTLS, and per-tenant billing — each with 100 % branch coverage.
+3. **Designed reproducible experimental setups** — all load-generation scripts, Helm values, and raw results are committed under `experiments/` so results can be independently verified.
+4. **Shared artifacts openly** — Helm charts, service source code, test suites (111 tests), and CI workflows are published on GitHub under the MIT licence.
+
+---
+
 ## Troubleshooting
 
 ### Pods Not Starting
