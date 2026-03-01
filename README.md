@@ -754,6 +754,77 @@ Full raw data and scripts in [`experiments/`](experiments/).
 
 ---
 
+## Data Analytics & Visualisation
+
+All benchmark results are accompanied by a reproducible analytics suite — Python scripts, a Jupyter notebook, and a live Grafana dashboard.
+
+### Python Visualisation Scripts
+
+```bash
+# Install dependencies
+pip install -r experiments/requirements.txt
+
+# Generate all charts → experiments/figures/
+python experiments/visualise.py
+
+# Custom output directory
+python experiments/visualise.py --output-dir docs/figures/
+```
+
+| Output file | Content |
+|-------------|---------|
+| `01_throughput_comparison.png` | Bar chart — req/s across all isolation experiments |
+| `02_latency_percentiles.png` | Grouped bars — P50/P95/P99 per experiment |
+| `03_interference_index.png` | Horizontal bar — II by isolation strategy |
+| `04_hpa_scaling.png` | Step chart — HPA replica timeline over 420 s |
+| `05_fl_convergence.png` | Line chart — training loss vs. FL round (FedAvg / DP / Krum) |
+| `06_summary_dashboard.png` | 2 × 3 composite of all five charts + summary table |
+
+### Jupyter Notebook — Pandas Analysis
+
+```bash
+cd experiments
+jupyter notebook analysis.ipynb
+```
+
+The notebook covers:
+- Raw results DataFrame with conditional formatting (II verdict colour coding)
+- Formula verification — recomputes II from raw P95 values and cross-checks against reported figures
+- All five visualisation charts inline
+- FL convergence table comparing FedAvg, DP, and Krum convergence speed
+- Final summary table with pass/warn/fail verdict highlighting
+
+### Grafana + Prometheus (Live Cluster)
+
+```bash
+# Deploy kube-prometheus-stack with pre-configured values
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+    --namespace monitoring --create-namespace \
+    -f helm-charts/monitoring/kube-prometheus-values.yaml
+
+# Apply the pre-built dashboard ConfigMap
+kubectl apply -f helm-charts/monitoring/dashboards/grafana-configmap.yaml
+
+# Port-forward and open
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+# http://localhost:3000  (admin / changeme)
+```
+
+The Grafana dashboard (`helm-charts/monitoring/dashboards/multi-tenant-overview.json`) provides 12 panels:
+
+| Section | Panels |
+|---------|--------|
+| Tenant Services | HTTP request rate by namespace · P95/P99 latency by namespace |
+| Resource Utilisation | CPU cores by tenant namespace · Memory working set by tenant |
+| HPA Autoscaling | Replica count timeline · CPU utilisation % vs. target |
+| FL Coordinator | Rounds completed · Rounds per tenant · Samples per tenant · Pending updates · Rejected updates · Aggregation duration |
+
+The FL coordinator is auto-scraped via `prometheus.io/scrape: "true"` pod annotations — no manual scrape config required on the pod side.
+
+---
+
 ## Threats to Validity
 
 | Threat | Category | Mitigation |
