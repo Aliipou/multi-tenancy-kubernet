@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-multi-tenant
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"       # picked up by Grafana sidecar
+data:
+  multi-tenant-overview.json: |-
+{{ .Files.Get "dashboards/multi-tenant-overview.json" | indent 4 }}

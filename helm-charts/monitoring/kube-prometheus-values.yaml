@@ -1,0 +1,134 @@
+# helm-charts/monitoring/kube-prometheus-values.yaml
+#
+# Custom values for the kube-prometheus-stack Helm chart.
+# Deploys Prometheus + Grafana pre-configured for multi-tenant namespace scraping
+# and the FL coordinator metrics endpoint.
+#
+# Deploy:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+#       --namespace monitoring --create-namespace \
+#       -f helm-charts/monitoring/kube-prometheus-values.yaml
+#
+# Access Grafana:
+#   kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+#   open http://localhost:3000   (admin / admin — change on first login)
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+  adminPassword: "changeme"          # Override in production with a Secret
+
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard        # Grafana sidecar watches ConfigMaps with this label
+      searchNamespace: monitoring
+
+  # Pre-load our custom dashboard from a ConfigMap (created separately via dashboards/)
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: "multi-tenant"
+          orgId: 1
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/multi-tenant
+
+  dashboardsConfigMaps:
+    multi-tenant: "grafana-dashboard-multi-tenant"
+
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/"
+    auth.anonymous:
+      enabled: false
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    # Scrape all namespaces matching these patterns
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+
+    # Scrape pods annotated with prometheus.io/scrape: "true"
+    additionalScrapeConfigs:
+      - job_name: "kubernetes-pods"
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      # FL coordinator — fl-system namespace
+      - job_name: "fl-coordinator"
+        static_configs:
+          - targets: ["fl-coordinator.fl-system.svc.cluster.local:8080"]
+        metrics_path: "/metrics"
+        scheme: http
+
+# ── AlertManager ─────────────────────────────────────────────────────────────
+alertmanager:
+  enabled: true
+
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["namespace", "alertname"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: "null"
+      routes:
+        - matchers:
+            - alertname =~ "Watchdog|InfoInhibitor"
+          receiver: "null"
+    receivers:
+      - name: "null"
+
+  alertmanagerSpec:
+    replicas: 1
+
+# ── Node Exporter & kube-state-metrics ───────────────────────────────────────
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+# ── Minimal resource requests (suitable for t3.micro dev cluster) ─────────────
+prometheusOperator:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
