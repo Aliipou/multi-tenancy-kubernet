@@ -20,6 +20,7 @@ from main import (
     INPUT_DIM,
     OUTPUT_DIM,
     LocalModel,
+    _add_gaussian_noise,
     _fetch_global_model,
     _mse_loss,
     _register,
@@ -27,6 +28,55 @@ from main import (
     generate_local_data,
     run_fl_loop,
 )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _add_gaussian_noise — differential privacy
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_add_gaussian_noise_disabled_when_epsilon_nonpositive() -> None:
+    weights = [[[1.0, 2.0], [3.0, 4.0]], [0.5]]
+    result = _add_gaussian_noise(weights, epsilon=0.0, delta=1e-5, sensitivity=1.0)
+    assert result is weights  # exact same object — DP disabled
+
+
+def test_add_gaussian_noise_disabled_when_epsilon_negative() -> None:
+    weights = [[[1.0]]]
+    result = _add_gaussian_noise(weights, epsilon=-1.0, delta=1e-5, sensitivity=1.0)
+    assert result is weights
+
+
+def test_add_gaussian_noise_disabled_when_delta_nonpositive() -> None:
+    weights = [[[1.0, 2.0]], [0.5]]
+    result = _add_gaussian_noise(weights, epsilon=1.0, delta=0.0, sensitivity=1.0)
+    assert result is weights
+
+
+def test_add_gaussian_noise_shape_preserved() -> None:
+    weights = [[[1.0, 2.0], [3.0, 4.0]], [0.5, -0.5]]
+    result = _add_gaussian_noise(weights, epsilon=1.0, delta=1e-5, sensitivity=1.0)
+    assert len(result) == len(weights)
+    for orig, noisy in zip(weights, result):
+        assert np.array(noisy).shape == np.array(orig).shape
+
+
+def test_add_gaussian_noise_produces_different_values() -> None:
+    weights = [[[1.0, 2.0], [3.0, 4.0]]]
+    result = _add_gaussian_noise(weights, epsilon=1.0, delta=1e-5, sensitivity=1.0)
+    # Probability that noise is exactly zero for every element is negligible
+    assert not np.allclose(np.array(result), np.array(weights))
+
+
+def test_add_gaussian_noise_large_epsilon_reduces_noise() -> None:
+    """Larger ε → smaller noise_scale → smaller noise magnitude."""
+    weights = [[[0.0] * 50]]
+
+    result_small_eps = _add_gaussian_noise(weights, epsilon=0.01, delta=1e-5, sensitivity=1.0)
+    result_large_eps = _add_gaussian_noise(weights, epsilon=1000.0, delta=1e-5, sensitivity=1.0)
+
+    noise_small = float(np.abs(np.array(result_small_eps[0])).mean())
+    noise_large = float(np.abs(np.array(result_large_eps[0])).mean())
+    assert noise_small > noise_large
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # generate_local_data
@@ -254,9 +304,14 @@ def test_mse_loss_is_non_negative() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _make_mock_client(response_json: dict) -> MagicMock:
-    """Return a mock httpx.AsyncClient whose HTTP methods return response_json."""
+    """Return a mock httpx.AsyncClient whose HTTP methods return response_json.
+
+    Explicitly set json as a plain MagicMock so that resp.json() returns the
+    dict synchronously.  Under Python 3.13 + pytest-asyncio 1.x, child attrs
+    of AsyncMock default to AsyncMock, making json() return a coroutine.
+    """
     mock_resp = AsyncMock()
-    mock_resp.json.return_value = response_json
+    mock_resp.json = MagicMock(return_value=response_json)
     mock_resp.raise_for_status = MagicMock()
 
     mock_client = MagicMock()
@@ -279,8 +334,9 @@ async def test_register_raises_on_http_error() -> None:
     import httpx
 
     mock_resp = AsyncMock()
-    mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-        "403", request=MagicMock(), response=MagicMock()
+    # Use MagicMock for raise_for_status so the side_effect fires synchronously
+    mock_resp.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock())
     )
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
@@ -316,8 +372,8 @@ async def test_submit_update_raises_on_http_error() -> None:
     import httpx
 
     mock_resp = AsyncMock()
-    mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-        "429", request=MagicMock(), response=MagicMock()
+    mock_resp.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError("429", request=MagicMock(), response=MagicMock())
     )
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_resp)
@@ -346,15 +402,17 @@ async def test_run_fl_loop_completes_one_round_then_cancels() -> None:
 
     mock_resp = AsyncMock()
     mock_resp.raise_for_status = MagicMock()
+    # Pre-set json as MagicMock so resp.json() returns dict, not coroutine
+    mock_resp.json = MagicMock(return_value=global_model_response)
 
     call_count = 0
 
     async def fake_get(*args: object, **kwargs: object) -> AsyncMock:
-        mock_resp.json.return_value = global_model_response
+        mock_resp.json = MagicMock(return_value=global_model_response)
         return mock_resp
 
     async def fake_post(*args: object, **kwargs: object) -> AsyncMock:
-        mock_resp.json.return_value = accepted_response
+        mock_resp.json = MagicMock(return_value=accepted_response)
         return mock_resp
 
     mock_client = MagicMock()
@@ -426,13 +484,14 @@ async def test_run_fl_loop_applies_global_weights_when_available() -> None:
 
     mock_resp = AsyncMock()
     mock_resp.raise_for_status = MagicMock()
+    mock_resp.json = MagicMock(return_value=global_model_response)
 
     async def fake_get(*args: object, **kwargs: object) -> AsyncMock:
-        mock_resp.json.return_value = global_model_response
+        mock_resp.json = MagicMock(return_value=global_model_response)
         return mock_resp
 
     async def fake_post(*args: object, **kwargs: object) -> AsyncMock:
-        mock_resp.json.return_value = accepted_response
+        mock_resp.json = MagicMock(return_value=accepted_response)
         return mock_resp
 
     async def fake_sleep(_: float) -> None:
@@ -455,3 +514,75 @@ async def test_run_fl_loop_applies_global_weights_when_available() -> None:
         if "/submit-update" in str(c)
     ]
     assert len(submit_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_fl_loop_logs_http_status_error_and_continues() -> None:
+    """HTTPStatusError from the coordinator must be logged; loop must sleep and continue."""
+    import httpx
+
+    register_resp = AsyncMock()
+    register_resp.raise_for_status = MagicMock()
+    register_resp.json = MagicMock(return_value={"status": "registered", "current_round": 0})
+
+    # raise_for_status raises so _fetch_global_model propagates HTTPStatusError
+    error_resp = AsyncMock()
+    error_resp.raise_for_status = MagicMock(
+        side_effect=httpx.HTTPStatusError("503", request=MagicMock(), response=MagicMock())
+    )
+
+    sleep_count = 0
+
+    async def fake_sleep(_: float) -> None:
+        nonlocal sleep_count
+        sleep_count += 1
+        raise asyncio.CancelledError
+
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(return_value=register_resp)
+    mock_client.get = AsyncMock(return_value=error_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("main.httpx.AsyncClient", return_value=mock_client), \
+         patch("main.asyncio.sleep", side_effect=fake_sleep):
+        with pytest.raises(asyncio.CancelledError):
+            await run_fl_loop()
+
+    assert sleep_count == 1  # loop reached sleep → exception was caught
+
+
+@pytest.mark.asyncio
+async def test_run_fl_loop_logs_value_error_and_continues() -> None:
+    """ValueError from set_weights (wrong shape) must be logged; loop must continue."""
+    # weights with wrong shape: only 1 tensor instead of 2 (W, b)
+    wrong_weights = [[[1.0]]]
+    global_model_response = {"round": 0, "weights": wrong_weights}
+
+    register_resp = AsyncMock()
+    register_resp.raise_for_status = MagicMock()
+    register_resp.json = MagicMock(return_value={"status": "registered", "current_round": 0})
+
+    model_resp = AsyncMock()
+    model_resp.raise_for_status = MagicMock()
+    model_resp.json = MagicMock(return_value=global_model_response)
+
+    sleep_count = 0
+
+    async def fake_sleep(_: float) -> None:
+        nonlocal sleep_count
+        sleep_count += 1
+        raise asyncio.CancelledError
+
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(return_value=register_resp)
+    mock_client.get = AsyncMock(return_value=model_resp)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("main.httpx.AsyncClient", return_value=mock_client), \
+         patch("main.asyncio.sleep", side_effect=fake_sleep):
+        with pytest.raises(asyncio.CancelledError):
+            await run_fl_loop()
+
+    assert sleep_count == 1  # loop continued past the ValueError

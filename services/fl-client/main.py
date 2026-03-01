@@ -18,6 +18,9 @@ Environment variables:
   FL_LOCAL_DATA_SIZE          Number of synthetic training samples (default: 200)
   FL_LEARNING_RATE            SGD learning rate (default: 0.01)
   FL_DATA_SEED                Random seed for synthetic data generation (default: 42)
+  DP_EPSILON                  Differential privacy ε budget (default: 1.0; ≤0 disables DP)
+  DP_DELTA                    Differential privacy δ failure probability (default: 1e-5)
+  DP_SENSITIVITY              L2 sensitivity of the weight update (default: 1.0)
 """
 
 import asyncio
@@ -44,6 +47,9 @@ OUTPUT_DIM: int = int(os.getenv("FL_OUTPUT_DIM", "1"))
 LOCAL_DATA_SIZE: int = int(os.getenv("FL_LOCAL_DATA_SIZE", "200"))
 LEARNING_RATE: float = float(os.getenv("FL_LEARNING_RATE", "0.01"))
 DATA_SEED: int = int(os.getenv("FL_DATA_SEED", "42"))
+DP_EPSILON: float = float(os.getenv("DP_EPSILON", "1.0"))
+DP_DELTA: float = float(os.getenv("DP_DELTA", "1e-5"))
+DP_SENSITIVITY: float = float(os.getenv("DP_SENSITIVITY", "1.0"))
 
 _HEADERS: dict[str, str] = {"x-fl-secret": FL_SECRET}
 _HTTP_TIMEOUT_S: float = 30.0
@@ -160,6 +166,33 @@ def _mse_loss(y_pred: np.ndarray, y_true: np.ndarray) -> float:
     return float(np.mean((y_pred - y_true) ** 2))
 
 
+def _add_gaussian_noise(
+    weights: list[list[float]],
+    epsilon: float,
+    delta: float,
+    sensitivity: float,
+) -> list[list[float]]:
+    """
+    Add calibrated Gaussian noise to model weights for (ε, δ)-differential privacy.
+
+    Implements the Gaussian mechanism (Dwork & Roth, 2014):
+        noise_scale = sensitivity × √(2 ln(1.25/δ)) / ε
+
+    Returns weights unchanged when ε ≤ 0 or δ ≤ 0 (DP disabled).
+    Raw data never leaves the client; only the noised weights are transmitted.
+    """
+    if epsilon <= 0 or delta <= 0:
+        return weights
+
+    noise_scale = sensitivity * math.sqrt(2.0 * math.log(1.25 / delta)) / epsilon
+    rng = np.random.default_rng()
+    noisy: list[list[float]] = []
+    for layer in weights:
+        arr = np.array(layer, dtype=np.float64)
+        noisy.append((arr + rng.normal(0.0, noise_scale, arr.shape)).tolist())
+    return noisy
+
+
 # ── Coordinator communication ─────────────────────────────────────────────────
 async def _register(client: httpx.AsyncClient) -> None:
     """Register this tenant with the coordinator before participating in FL."""
@@ -242,6 +275,10 @@ async def run_fl_loop() -> None:
                     metrics["final_loss"],
                 )
 
+                noisy_weights = _add_gaussian_noise(
+                    model.get_weights(), DP_EPSILON, DP_DELTA, DP_SENSITIVITY
+                )
+                model.set_weights(noisy_weights)
                 await _submit_update(client, model, metrics, round_num)
 
             except httpx.HTTPStatusError as exc:
