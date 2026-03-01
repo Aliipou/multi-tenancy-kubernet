@@ -43,6 +43,14 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.sharedSecretName }}
                   key: {{ .Values.sharedSecretKey }}
+            {{- if .Values.tls.enabled }}
+            - name: FL_TLS_CERT
+              value: /tls/tls.crt
+            - name: FL_TLS_KEY
+              value: /tls/tls.key
+            - name: FL_TLS_CA
+              value: /tls/ca.crt
+            {{- end }}
           resources:
             requests:
               cpu: {{ .Values.coordinator.resources.requests.cpu | quote }}
@@ -66,9 +74,21 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          {{- if .Values.tls.enabled }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /tls
+              readOnly: true
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
+      {{- if .Values.tls.enabled }}
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: {{ .Values.tls.secretName }}
+      {{- end }}

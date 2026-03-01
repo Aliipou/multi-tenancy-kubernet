@@ -36,3 +36,19 @@ namespace: fl-system
 # Label selector for tenant namespaces allowed to reach the coordinator.
 # Tenant namespaces must be labelled: fl-enabled=true
 tenantFlEnabledLabel: "true"
+
+# ── mTLS configuration (requires cert-manager in the cluster) ────────────────
+tls:
+  # Set to true to enable mutual TLS between FL clients and the coordinator.
+  # A cert-manager Certificate and self-signed Issuer are created automatically.
+  enabled: false
+
+  # Name of the Kubernetes Secret that cert-manager will populate with the TLS
+  # keypair. The coordinator Deployment mounts it as a volume.
+  secretName: fl-coordinator-tls
+
+  # DNS SANs for the Certificate. Must include the in-cluster service FQDN.
+  dnsNames:
+    - fl-coordinator.fl-system.svc.cluster.local
+    - fl-coordinator.fl-system.svc
+    - fl-coordinator

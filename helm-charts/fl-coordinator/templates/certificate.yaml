@@ -1,0 +1,44 @@
+{{- if .Values.tls.enabled }}
+---
+# Self-signed CA Issuer — used to sign the coordinator's server certificate.
+# Replace with a production Issuer (e.g. Let's Encrypt, Vault) for real deployments.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: fl-coordinator-selfsigned
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fl-coordinator
+    component: federated-learning
+    app.kubernetes.io/managed-by: Helm
+spec:
+  selfSigned: {}
+---
+# Certificate for the FL Coordinator.
+# cert-manager will create / rotate the TLS keypair and store it in
+# the Secret named by .Values.tls.secretName.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: fl-coordinator-tls
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fl-coordinator
+    component: federated-learning
+    app.kubernetes.io/managed-by: Helm
+spec:
+  secretName: {{ .Values.tls.secretName }}
+  issuerRef:
+    name: fl-coordinator-selfsigned
+    kind: Issuer
+  # Rotate 30 days before expiry
+  duration: 8760h      # 1 year
+  renewBefore: 720h    # 30 days
+  dnsNames:
+    {{- range .Values.tls.dnsNames }}
+    - {{ . | quote }}
+    {{- end }}
+  usages:
+    - server auth
+    - client auth
+{{- end }}
