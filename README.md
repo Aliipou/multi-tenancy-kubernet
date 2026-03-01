@@ -456,8 +456,7 @@ apiService:
 ```
 
 ### Remove a Tenant
-
-```bash
+```bash 
 ./scripts/cleanup-tenant.sh 1
 ```
 
