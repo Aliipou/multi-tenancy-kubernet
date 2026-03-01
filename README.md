@@ -27,7 +27,7 @@ Bachelor's Thesis · Centria University of Applied Sciences · 2026
 - [Testing](#testing)
 - [Monitoring](#monitoring)
 - [Security](#security)
-- [Next Phase: Federated Learning](#next-phase-federated-learning)
+- [Federated Learning](#federated-learning)
 - [Performance Results](#performance-results)
 - [Troubleshooting](#troubleshooting)
 - [Additional Documentation](#additional-documentation)
@@ -188,7 +188,7 @@ This project implements a multi-tenant SaaS application on Kubernetes with:
 - **Autoscaling**: Horizontal Pod Autoscaler (HPA) for each service
 - **Security**: RBAC, NetworkPolicies, and Pod Security Contexts
 - **Observability**: Prometheus metrics and health checks
-- **FL extension** *(Next-phase)*: Privacy-preserving Federated Learning across tenants
+- **FL extension**: Privacy-preserving Federated Learning across tenants with DP, Byzantine robustness, async aggregation, mTLS, and per-tenant billing
 
 ### Tenant Profiles
 
@@ -386,12 +386,28 @@ Then open:
 │   ├── test-integration.sh      # End-to-end API tests
 │   ├── collect-metrics.sh       # Metrics snapshot
 │   └── monitor-live.sh          # Live dashboard
-├── Next-phase/                  # Federated Learning extension
-│   ├── main.py                  # FL Coordinator (FedAvg server)
-│   ├── deployment.yaml          # K8s manifest for FL coordinator
-│   ├── networkpolicy.yaml       # FL-specific NetworkPolicies
-│   ├── provision-tenant-with-fl.sh  # Tenant provisioning with FL
-│   └── ci.yml                   # CI/CD for FL components
+├── services/fl-coordinator/     # FL aggregation server (Python / FastAPI)
+│   ├── main.py                  # FedAvg · Krum · TrimmedMean · mTLS · billing
+│   ├── requirements.txt
+│   ├── pytest.ini
+│   └── tests/
+│       ├── conftest.py
+│       └── test_coordinator.py  # 66 tests · 100% coverage
+├── services/fl-client/          # Per-tenant FL training agent (Python / numpy)
+│   ├── main.py                  # Train locally → add DP noise → submit weights
+│   ├── requirements.txt
+│   ├── pytest.ini
+│   └── tests/
+│       ├── conftest.py
+│       └── test_client.py       # 45 tests · 100% coverage
+├── helm-charts/fl-coordinator/  # Helm chart — coordinator + mTLS cert-manager
+│   ├── Chart.yaml
+│   ├── values.yaml
+│   └── templates/
+│       ├── deployment.yaml      # TLS volume mounts (conditional)
+│       ├── service.yaml
+│       ├── networkpolicy.yaml
+│       └── certificate.yaml     # cert-manager Certificate + Issuer (tls.enabled)
 ├── docs/                        # Thesis documentation
 │   ├── INTRODUCTION.md
 │   ├── ARCHITECTURE.md
@@ -564,9 +580,9 @@ kubectl describe networkpolicy -n tenant1
 
 ---
 
-## Next Phase: Federated Learning
+## Federated Learning
 
-The `Next-phase/` directory extends the platform with **privacy-preserving Federated Learning (FL)**. Tenants can collaborate to train a shared ML model without any raw data ever leaving their namespace — only model weight updates travel the network.
+The FL stack lives in `services/fl-coordinator/` and `services/fl-client/`. Tenants collaborate to train a shared ML model without any raw data ever leaving their namespace — only (optionally noised) model weight updates travel the network.
 
 ### Why This Matters
 
@@ -578,11 +594,11 @@ Healthcare SaaS, fintech, and any regulated industry where data residency is non
 ┌─────────────────────────────────────────────────────────────┐
 │                    Kubernetes Cluster (k3s)                  │
 │                                                              │
-│  ┌──────────────┐   weights only    ┌────────────────────┐  │
+│  ┌──────────────┐  weights (mTLS)   ┌────────────────────┐  │
 │  │  fl-system   │◄──────────────────│  tenant-alpha      │  │
-│  │  ┌──────────┐│   weights only    │  ┌──────────────┐  │  │
+│  │  ┌──────────┐│  weights (mTLS)   │  ┌──────────────┐  │  │
 │  │  │   FL     │◄│───────────────────│  │  FL Client   │  │  │
-│  │  │Coordinator│ │                  │  │  API Service │  │  │
+│  │  │Coordinator│ │                  │  │  +DP noise   │  │  │
 │  │  └──────────┘ │   global model   │  └──────────────┘  │  │
 │  │               │──────────────────►│                    │  │
 │  └──────────────┘                   └────────────────────┘  │
@@ -591,15 +607,36 @@ Healthcare SaaS, fintech, and any regulated industry where data residency is non
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### FedAvg Aggregation
+### Coordinator Endpoints
 
-Each FL round:
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/register` | secret | Register tenant before participating |
+| GET | `/global-model` | secret | Fetch current global weights |
+| POST | `/submit-update` | secret | Submit local weight update |
+| GET | `/round-status` | secret | Current round, pending clients |
+| GET | `/billing` | secret | Per-tenant rounds + samples metered |
+| GET | `/health` | none | Liveness / readiness probe |
+| GET | `/metrics` | none | Prometheus metrics |
+
+### FL Round (FedAvg default)
 
 1. Coordinator broadcasts current global model weights
 2. Each tenant client pulls global weights and trains locally for N epochs
-3. Clients send back updated weights + sample count — **no raw data**
-4. Coordinator computes weighted average: `w_global = Σ (n_i / N_total) × w_i`
-5. New global model is available for the next round
+3. Client adds calibrated Gaussian noise (DP) before sending
+4. Coordinator accepts updates for current **or future** rounds (async FL)
+5. Aggregation fires when `min_clients` updates arrive **or** the async watchdog timeout elapses
+6. Coordinator selects strategy: FedAvg · Krum · TrimmedMean
+
+### Implemented FL Extensions
+
+| Extension | Key env vars | Default |
+|-----------|-------------|---------|
+| **Differential Privacy** (Gaussian mechanism) | `DP_EPSILON`, `DP_DELTA`, `DP_SENSITIVITY` | ε=1.0, δ=1e-5, s=1.0 |
+| **Byzantine-robust aggregation** | `FL_AGGREGATION_STRATEGY` | `fedavg` (`krum` / `trimmed_mean`) |
+| **Async FL watchdog** | `FL_ASYNC_TIMEOUT_S` | 300 s |
+| **mTLS** (cert-manager) | `FL_TLS_CERT`, `FL_TLS_KEY`, `FL_TLS_CA` | disabled |
+| **Tenant billing** | — (always on) | `GET /billing` |
 
 ### FL Isolation Layers
 
@@ -607,9 +644,11 @@ Each FL round:
 |-------|-----------|------------------|
 | Network | NetworkPolicy | Cross-tenant traffic; FL client can only reach coordinator |
 | Protocol | Weights-only | Raw data ever leaving a namespace |
-| Auth | Shared secret (extendable to mTLS) | Unauthenticated weight submissions |
+| Privacy | Gaussian DP noise | Weight-inversion inference attacks |
+| Auth | Shared secret + optional mTLS | Unauthenticated or spoofed weight submissions |
+| Robustness | Krum / TrimmedMean | Byzantine clients corrupting the global model |
 
-### Deploying the FL Extension
+### Deploying the FL Stack
 
 ```bash
 # 1. Create control-plane namespace and shared secret
@@ -618,40 +657,50 @@ kubectl create secret generic fl-shared-secret \
   --from-literal=secret=$(openssl rand -hex 32) \
   -n fl-system
 
-# 2. Apply coordinator manifests
-kubectl apply -f Next-phase/deployment.yaml
-kubectl apply -f Next-phase/networkpolicy.yaml
+# 2. Deploy coordinator (plain HTTP)
+helm install fl-coordinator helm-charts/fl-coordinator -n fl-system
 
-# 3. Provision tenants with FL enabled
-chmod +x Next-phase/provision-tenant-with-fl.sh
-./Next-phase/provision-tenant-with-fl.sh tenant-alpha --enable-fl
-./Next-phase/provision-tenant-with-fl.sh tenant-beta  --enable-fl
+# 2b. Deploy coordinator with mTLS (requires cert-manager)
+helm install fl-coordinator helm-charts/fl-coordinator -n fl-system \
+  --set coordinator.tls.enabled=true
 
-# 4. Check FL round status
+# 3. Check FL round status
 kubectl port-forward svc/fl-coordinator 8080:8080 -n fl-system &
-curl http://localhost:8080/round-status \
-  -H "x-fl-secret: $(kubectl get secret fl-shared-secret -n fl-system \
-      -o jsonpath='{.data.secret}' | base64 -d)"
+SECRET=$(kubectl get secret fl-shared-secret -n fl-system \
+  -o jsonpath='{.data.secret}' | base64 -d)
+
+curl http://localhost:8080/round-status  -H "x-fl-secret: $SECRET"
+curl http://localhost:8080/billing       -H "x-fl-secret: $SECRET"
 ```
 
-### Extending to Differential Privacy
+### Differential Privacy Quick Reference
 
-To add DP noise before weight submission, modify `services/fl-client/main.py`:
-
-```python
-def add_dp_noise(weights, epsilon=1.0, delta=1e-5, sensitivity=1.0):
-    """Add Gaussian noise for (epsilon, delta)-DP."""
-    sigma = sensitivity * (2 * np.log(1.25 / delta)) ** 0.5 / epsilon
-    return [w + np.random.normal(0, sigma, w.shape) for w in weights]
+```bash
+# Set per-client DP budget (in FL client pod env vars)
+FL_TLS_CERT=/tls/tls.crt       # path to cert (enables mTLS)
+DP_EPSILON=1.0                  # privacy budget (lower = more noise)
+DP_DELTA=1e-5                   # failure probability
+DP_SENSITIVITY=1.0              # L2 sensitivity of weight update
+FL_AGGREGATION_STRATEGY=krum    # fedavg | krum | trimmed_mean
+FL_ASYNC_TIMEOUT_S=120          # fire aggregation after N seconds
 ```
 
-### Future FL Work
+### Running FL Tests
 
-- [ ] Differential Privacy noise injection in FL clients
-- [ ] Byzantine-robust aggregation (Krum, Trimmed Mean)
-- [ ] Asynchronous FL (remove round-synchronisation requirement)
-- [ ] mTLS between FL clients and coordinator (replace shared secret)
-- [ ] Tenant billing and resource metering for FL compute
+```bash
+cd services/fl-client     && python -m pytest tests/ --cov=main --cov-fail-under=100 -q
+cd services/fl-coordinator && python -m pytest tests/ --cov=main --cov-fail-under=100 -q
+# 45 client tests · 66 coordinator tests · 100% coverage each
+```
+
+### Implemented FL Roadmap
+
+- [x] FedAvg aggregation with sample-weighted averaging (McMahan et al. 2017)
+- [x] Differential Privacy — Gaussian mechanism noise injection (Dwork & Roth 2014)
+- [x] Byzantine-robust aggregation — Krum (Blanchard et al. 2017) + Coordinate-wise TrimmedMean
+- [x] Asynchronous FL — timer-based watchdog fires aggregation even with fewer than min_clients
+- [x] mTLS — `ssl.SSLContext` + cert-manager `Certificate` + `Issuer` Helm templates
+- [x] Tenant billing / metering — `GET /billing` with Prometheus counters per tenant
 
 ---
 
@@ -693,13 +742,15 @@ Full raw data and scripts in [`experiments/`](experiments/).
 
 > **Finding (RQ4):** HPA reacts within 75 s (15 s sync period + ~45 s pod startup). No flapping observed (ASS < 0.05). P99 spikes during the pod-start window are the primary latency risk.
 
-### FL Coordinator (Next-phase)
+### FL Coordinator
 
 | Metric | Value |
 |--------|-------|
 | FedAvg aggregation time (2 clients) | < 50 ms |
+| Krum / TrimmedMean aggregation time | < 80 ms |
 | Cross-tenant data leakage violations | 0 |
-| Tenant provisioning time | ~10 min |
+| Unit + integration tests | 111 total (45 client + 66 coordinator) |
+| Branch coverage | 100% (both services) |
 
 ---
 
@@ -792,6 +843,8 @@ GitHub: [Aliipou/multi-tenancy-kubernet](https://github.com/Aliipou/multi-tenanc
 - NGINX Ingress Controller
 - Prometheus monitoring ecosystem
 - McMahan et al. (2017) — FedAvg algorithm
+- Dwork & Roth (2014) — The Algorithmic Foundations of Differential Privacy
+- Blanchard et al. (2017) — Machine Learning with Adversaries: Byzantine Tolerant Gradient Descent (Krum)
 
 ---
 
