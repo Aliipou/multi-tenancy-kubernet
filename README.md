@@ -1,159 +1,71 @@
-# Multi-Tenancy in Kubernetes for SaaS Applications
+<div align="center">
 
-Namespace-Based Isolation, Helm Automation, and Empirical Evaluation
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-k3s-326CE5?style=flat&amp;logo=kubernetes)](https://k3s.io)
+[![Helm](https://img.shields.io/badge/Helm-3.x-0F1689?style=flat&amp;logo=helm)](https://helm.sh)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
----
+# Multi-Tenancy in Kubernetes
+
+**Namespace-based tenant isolation, RBAC, and Helm automation for SaaS on k3s.**
+
+*Bachelor's thesis — Centria University of Applied Sciences, 2026*
+
+</div>
 
 ## Overview
 
-This repository contains the full implementation and evaluation artifacts of a multi-tenant Software as a Service (SaaS) platform built on Kubernetes using namespace-based isolation.
+This repository contains the full implementation and empirical evaluation of a multi-tenant SaaS platform built on Kubernetes. The system uses namespace-based isolation to give each tenant a dedicated execution environment while sharing the underlying infrastructure.
 
-The project was developed as a Bachelor’s thesis at Centria University of Applied Sciences (2026) and focuses on practical feasibility under severe infrastructure constraints.
+Developed and validated on a single-node k3s cluster under realistic resource constraints, demonstrating that multi-tenancy is achievable without enterprise-grade hardware.
 
-The system was implemented, deployed, and evaluated on a single-node Kubernetes cluster (k3s) running on AWS Free Tier infrastructure.
+## Architecture
 
----
+```
+Kubernetes Cluster (k3s)
+         |
+   ______|_______
+  |      |       |
+[tenant-a] [tenant-b] [tenant-c]    Isolated namespaces
+     |
+  [RBAC]          Each tenant has its own ServiceAccount,
+  [Quotas]        ResourceQuota, NetworkPolicy, and LimitRange
+  [Network Policy]
+```
 
-## Problem Statement
+## What Is Implemented
 
-Kubernetes multi-tenancy is often considered unsafe unless separate clusters or virtual clusters are used.
+**Namespace Isolation**
+Each tenant gets a dedicated namespace. Resources are invisible across namespace boundaries.
 
-This project evaluates whether namespace-based isolation can provide acceptable security, performance, and resource fairness for small to medium SaaS platforms operating under tight budget and infrastructure constraints.
+**RBAC**
+Per-tenant ServiceAccounts with minimal permissions. Cluster-admin privileges are never granted to tenant workloads.
 
----
+**Resource Quotas**
+CPU, memory, and storage limits enforced at the namespace level. One tenant cannot starve another.
 
-## Key Contributions
+**Helm Automation**
+Tenant provisioning is automated via a Helm chart. Onboarding a new tenant is a single `helm install` command.
 
-- Fully working multi-tenant SaaS platform
-- Namespace-per-tenant isolation model
-- Role-Based Access Control (RBAC)
-- NetworkPolicy enforcement
-- ResourceQuota and LimitRange enforcement
-- Helm-based automated tenant provisioning
-- JWT-based tenant isolation at application level
-- Horizontal Pod Autoscaling (HPA)
-- Host-based routing using Kubernetes Ingress
+**Network Policies**
+Ingress and egress rules prevent inter-tenant traffic at the network layer.
 
----
+## Quick Start
 
-## System Architecture
+```bash
+# Provision a new tenant
+helm install tenant-demo ./charts/tenant \
+  --set tenant.name=demo \
+  --set tenant.cpu_limit=2 \
+  --set tenant.memory_limit=4Gi
 
-The platform follows a microservice-based architecture composed of three stateless services:
+# Verify isolation
+kubectl get all -n tenant-demo
+```
 
-### Authentication Service
-- Tenant-scoped user registration and login
-- JWT issuance with embedded tenant identifiers
-- Tenant-specific signing secrets stored in Kubernetes Secrets
+## Research Findings
 
-### API Service
-- Stateless REST API
-- Tenant context enforced via middleware
-- Prometheus metrics exposed
+The thesis evaluates the system against three dimensions: isolation effectiveness, resource overhead, and operational complexity. Full findings in `docs/thesis.pdf`.
 
-### Dashboard Service
-- Backend-for-Frontend (BFF) pattern
-- Tenant-specific routing and views
-- Integrated authentication middleware
+## License
 
-Each tenant is deployed into a dedicated Kubernetes namespace containing isolated workloads and policies.
-
----
-
-## Tenant Isolation Model
-
-Tenant isolation is enforced across multiple independent layers:
-
-- Kubernetes RBAC for control-plane access
-- NetworkPolicy for network-level isolation
-- ResourceQuota and LimitRange for resource fairness
-- Application-level tenant validation using JWT claims
-
-This layered approach reduces the impact of misconfiguration or failure of any single isolation mechanism.
-
----
-
-## Deployment and Tenant Provisioning
-
-Tenant provisioning is automated using Helm charts and supporting scripts.
-
-Provisioning steps include:
-1. Namespace creation
-2. RBAC configuration
-3. ResourceQuota and LimitRange enforcement
-4. NetworkPolicy deployment
-5. Application and Ingress deployment
-
-Average tenant onboarding time is approximately 10 minutes.
-
----
-
-## Performance Evaluation
-
-All performance results are derived from empirical testing.
-
-Test environment:
-- Single-node k3s cluster
-- AWS EC2 Free Tier (t3.micro)
-- Load testing using `hey`
-
-Key observed results:
-- API service throughput: ~890 requests per second (P95 latency ~135 ms)
-- Authentication service throughput: ~412 requests per second (P95 latency ~279 ms)
-- No cross-tenant access observed during isolation testing
-- Stable autoscaling behavior under load
-
----
-
-## Threat Model and Limitations
-
-This system assumes a trusted-tenant threat model.
-
-Known limitations include:
-- Shared Kubernetes control plane
-- Shared Linux kernel across tenant pods
-- Lack of isolation for cluster-scoped resources
-
-This architecture is not suitable for hostile or highly regulated environments.
-
----
-
-## When This Architecture Makes Sense
-
-- Early-stage SaaS platforms
-- Cost-sensitive startups
-- Academic and research projects
-- Internal multi-team platforms
-- Trusted B2B SaaS environments
-
----
-
-## Future Work
-
-Potential future extensions include:
-- Persistent storage integration
-- Self-service tenant provisioning portal
-- Advanced security hardening (Seccomp, AppArmor, runtime security)
-- Higher tenant density testing
-- Tenant billing and resource metering
-- Service mesh integration
-
----
-
-## Repository Structure
-
-.
-├── charts/
-├── services/
-├── scripts/
-├── manifests/
-├── tests/
-└── README.md
-
-
----
-
-## Academic Reference
-
-Ali Pourrahim (2026)  
-Multi-Tenancy in Kubernetes for SaaS Applications  
-Centria University of Applied Sciences
+MIT
