@@ -7,32 +7,22 @@ on:
     branches: [main, master]
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install ruff
-      - run: ruff check . --select E,F --ignore E501,E402,F401,F841 || true
-
   test:
-    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install dependencies
+      - name: Install deps
         run: |
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov ruff
           pip install -r requirements.txt 2>/dev/null || true
-      - name: Run tests
-        run: pytest tests/ -v --cov --cov-report=xml 2>/dev/null || echo "No tests found - OK"
+      - name: Lint
+        run: ruff check . --select E,F,I --ignore E501,E402,F401,F841 || true
+      - name: Test
+        run: pytest tests/ -v --cov --cov-report=xml 2>/dev/null || echo "No tests found"
       - uses: codecov/codecov-action@v4
+        continue-on-error: true
         with:
           file: coverage.xml
-        continue-on-error: true
