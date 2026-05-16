@@ -2,6 +2,11 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# Auth secrets — must be provided at install time, never committed to source control
+auth:
+  # Generate with: openssl rand -base64 32
+  jwtSecret: ""  # REQUIRED: set via --set auth.jwtSecret=... or values override
+
 # Tenant information
 tenant:
   id: "tenant1"
