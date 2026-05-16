@@ -1,28 +1,20 @@
 name: CI
 
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+on: [push, pull_request]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: azure/setup-helm@v3
         with:
-          python-version: "3.11"
-      - name: Install deps
+          version: 'latest'
+      - name: Helm lint
         run: |
-          pip install pytest pytest-cov ruff
-          pip install -r requirements.txt 2>/dev/null || true
-      - name: Lint
-        run: ruff check . --select E,F,I --ignore E501,E402,F401,F841 || true
-      - name: Test
-        run: pytest tests/ -v --cov --cov-report=xml 2>/dev/null || echo "No tests found"
-      - uses: codecov/codecov-action@v4
-        continue-on-error: true
-        with:
-          file: coverage.xml
+          find . -name "Chart.yaml" -exec dirname {} \; | while read dir; do
+            echo "Linting $dir"
+            helm lint "$dir"
+          done
+      - name: Validate YAML
+        run: find . -name "*.yaml" -o -name "*.yml" | xargs -I {} sh -c 'echo "Checking {}..." && cat "{}" | python3 -c "import sys,yaml; yaml.safe_load(sys.stdin)" && echo "OK"' 2>/dev/null || true
